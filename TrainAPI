@@ -1,0 +1,54 @@
+import express from "express"; import axios from "axios";
+
+const app = express();
+
+app.get("/trains", async (req, res) => {
+  const now = new Date();
+  const depTime = now.getTime() + 12*60*60*1000;
+
+  // To the list of trains from John Doe Railways
+  const trains = await axios.get("https://api.johndoerailways.com/trains");
+ // Filter out trains that are departing in the next 30 minutes
+  const fTrains = trains.data.filter((train) => {
+    return train.depTime > depTime;
+  });
+
+  // Calculate the seat availability and prices for each train
+
+  const trainsWithSeatAvailability = fTrains.map((train) => {
+const sleeperSeatAvailability = await axios.get(
+      `https://api.johndoerailways.com/trains/${train.id}/sleeper-seat-availability`
+    );    const acSeatAvailability = await axios.get(
+      `https://api.johndoerailways.com/trains/${train.id}/ac-seat-availability`
+    );
+
+    return {
+      ...train,
+      sleeperSeatAvailability: sleeperSeatAvailability.data,
+      acSeatAvailability: acSeatAvailability.data,
+    };
+  });
+
+  // Sort the trains by price, tickets, and departure time
+
+  const sortedTrains = trainsWithSeatAvailability.sort((a, b) => {
+    const priceDiff = a.price - b.price;
+    if (priceDiff !== 0) {
+      return priceDiff;
+    }
+
+    const ticketsDiff = b.sleeperSeatAvailability.available - a.sleeperSeatAvailability.available;
+    if (ticketsDiff !== 0) {
+      return ticketsDiff;
+    }
+
+    return b.departureTime - a.departureTime;
+  });
+
+  // Return the list of trains
+  res.json(sortedTrains);
+});
+
+app.listen(3000, () => {
+  console.log("Server listening on port 3000");
+});
